@@ -27,33 +27,31 @@ class DataExtractor:
         return invoices_data, expired_data
 
     def _word_to_number(self, number):
-        mapping = {'ten': 10}
+        mapping = {
+            'five': 5,
+            'ten': 10
+        }
         if isinstance(number, str):
             number = mapping[number.lower()]
         return number
 
     def transform(self):
-        i, j = 0, 0
         invoices_data, expired_data = self._load_dataset()
-        for k, invoice in enumerate(invoices_data):
-            print(k, invoice)
         invoices = []
 
         for invoice in invoices_data:
             if 'items' not in invoice:
                 continue
-            i += 1
-            j = 0
-            print("big", i)
             try:
                 invoice_id = int(invoice['id'].replace('O', '0'))
             except AttributeError:
                 invoice_id = int(invoice['id'])
-            created_on = pd.to_datetime(invoice['created_on'])
+            try:
+                created_on = pd.to_datetime(invoice['created_on'])
+            except ValueError:
+                continue
             invoice_total = sum(item['item']['unit_price'] * self._word_to_number(item['quantity']) for item in invoice['items'])
             for item in invoice['items']:
-                j+=1
-                print(j)
                 quantity = self._word_to_number(item['quantity'])
                 item = item['item']
                 invoiceitem_id = int(item['id'])
@@ -86,6 +84,9 @@ class DataExtractor:
             ['invoice_id', 'created_on', 'invoiceitem_id', 'invoiceitem_name', 'type', 'unit_price', 'total_price',
              'percentage_in_invoice', 'is_expired']]
 
+    def save_csv(self, file_name):
+        df = self.transform()
+        df.to_csv(file_name, index=False)
 
 data_extractor = DataExtractor("data.zip")
-data_extractor.transform()
+data_extractor.save_csv("data.csv")
