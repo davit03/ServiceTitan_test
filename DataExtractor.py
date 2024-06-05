@@ -26,39 +26,59 @@ class DataExtractor:
 
         return invoices_data, expired_data
 
+    def _word_to_number(self, number):
+        mapping = {'ten': 10}
+        if isinstance(number, str):
+            number = mapping[number.lower()]
+        return number
+
     def transform(self):
+        i, j = 0, 0
         invoices_data, expired_data = self._load_dataset()
-        print(invoices_data)
+        for k, invoice in enumerate(invoices_data):
+            print(k, invoice)
         invoices = []
 
         for invoice in invoices_data:
+            if 'items' not in invoice:
+                continue
+            i += 1
+            j = 0
+            print("big", i)
             try:
                 invoice_id = int(invoice['id'].replace('O', '0'))
             except AttributeError:
                 invoice_id = int(invoice['id'])
             created_on = pd.to_datetime(invoice['created_on'])
-            invoice_total = sum(item['unit_price'] * quantity for item, quantity in invoice['items'])
-            if 'items' in invoice:
-                for item, quantity in invoice['items']:
-                    invoiceitem_id = item['id']
-                    invoiceitem_name = item['name']
-                    types = {0: 'Material', 1: 'Equipment', 2: 'Service', 3: 'Other'}
-                    type = types.get(item['type'])
-                    unit_price = item['unit_price']
-                    total_price = item['unit_price'] * item['quantity']
-                    percentage_in_invoice = total_price / invoice_total if invoice_total != 0 else 0
-                    is_expired = invoice_id in expired_data
-                    invoices.append({
-                        'invoice_id': invoice_id,
-                        'created_on': created_on,
-                        'invoiceitem_id': invoiceitem_id,
-                        'invoiceitem_name': invoiceitem_name,
-                        'type': type,
-                        'unit_price': unit_price,
-                        'total_price': total_price,
-                        'percentage_in_invoice': percentage_in_invoice,
-                        'is_expired': is_expired
-                    })
+            invoice_total = sum(item['item']['unit_price'] * self._word_to_number(item['quantity']) for item in invoice['items'])
+            for item in invoice['items']:
+                j+=1
+                print(j)
+                quantity = self._word_to_number(item['quantity'])
+                item = item['item']
+                invoiceitem_id = int(item['id'])
+                invoiceitem_name = item['name']
+                types = {0: 'Material', 1: 'Equipment', 2: 'Service', 3: 'Other'}
+                try:
+                    item_type = int(item['type'])
+                except ValueError:
+                    item_type = int(item['type'].replace('O', '0'))
+                type = types.get(item_type, 'Other')
+                unit_price = item['unit_price']
+                total_price = item['unit_price'] * quantity
+                percentage_in_invoice = total_price / invoice_total if invoice_total != 0 else 0
+                is_expired = invoice_id in expired_data
+                invoices.append({
+                    'invoice_id': invoice_id,
+                    'created_on': created_on,
+                    'invoiceitem_id': invoiceitem_id,
+                    'invoiceitem_name': invoiceitem_name,
+                    'type': type,
+                    'unit_price': unit_price,
+                    'total_price': total_price,
+                    'percentage_in_invoice': percentage_in_invoice,
+                    'is_expired': is_expired
+                })
         df = pd.DataFrame(invoices)
         df = df.sort_values(by=['invoice_id', 'invoiceitem_id']).reset_index(drop=True)
 
